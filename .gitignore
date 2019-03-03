@@ -1,0 +1,12 @@
+# pip files
+Pipfile
+*.lock
+
+# folders
+*.vscode
+/images/icon.png
+
+#data
+*.db
+*.json
+ 
