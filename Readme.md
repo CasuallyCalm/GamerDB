@@ -4,16 +4,17 @@ Do you have different gamertags or IDs associated with your various games? Let G
 ## Main Commands
 
 ### Register
-![register](https://github.com/stroupbslayen/GamerDB/blob/master/images/examples/register.PNG)
+![register](https://raw.githubusercontent.com/stroupbslayen/GamerDB/master/images/examples/register.PNG)
 
 ### Unregister
-![unregister](https://github.com/stroupbslayen/GamerDB/blob/master/images/examples/unregister.PNG)
+![unregister](https://raw.githubusercontent.com/stroupbslayen/GamerDB/master/images/examples/unregister.PNG)
 
 ### Profile
 Not mentioning someone will display your profile
 
-![profile](https://github.com/stroupbslayen/GamerDB/blob/master/images/examples/profile.PNG)
+![profile](https://raw.githubusercontent.com/stroupbslayen/GamerDB/master/images/examples/profile.PNG)
 
 Mentioning someone will display their profile
 
-![profile2](https://github.com/stroupbslayen/GamerDB/blob/master/images/examples/profile2.PNG)
+![profile2](https://raw.githubusercontent.com/stroupbslayen/GamerDB/master/images/examples/profile2.PNG)
+
