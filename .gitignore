@@ -1,12 +1,11 @@
-# pip files
-Pipfile
-*.lock
+# trashed
+*.env
+*.pyc
 
 # folders
 *.vscode
-/images/icon.png
+*.git
 
 #data
 *.db
 *.json
- 
