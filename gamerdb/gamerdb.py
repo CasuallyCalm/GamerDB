@@ -9,6 +9,15 @@ from . import sql
 
 @dataclass
 class Platform(commands.Converter):
+    """
+    A Dataclass representing platforms
+
+    Attrs:
+       id: int
+       name: str
+       emoji_id: int
+    """
+
     id: int = None
     name: str = None
     emoji_id: int = None
@@ -26,6 +35,9 @@ class GamerDB(commands.Cog):
         self.bot.loop.create_task(self.connect_and_create())
 
     async def connect_and_create(self):
+        """
+        Sets up the database for the cog
+        """
         self.db = await aiosqlite.connect("gamerdb.db")
         self.db.row_factory = aiosqlite.Row
         await self.db.execute(sql.CreateTable.players)
@@ -34,11 +46,23 @@ class GamerDB(commands.Cog):
         await self.cache_platforms()
 
     async def cache_platforms(self):
+        """
+        Cache platforms to reduce queries
+        """
         async with self.db.execute(sql.Query.platforms) as cursor:
             self.platforms = {p["name"]: Platform(*p) for p in await cursor.fetchall()}
 
     @staticmethod
     def filter_platforms(platforms: List[Platform]) -> List[Platform]:
+        """
+        Filter out `None` types in greedy platform lists
+
+        Args:
+            platforms (List[Platform]): A list of platforms returned from `commands.Greedy` args
+
+        Returns:
+            List[Platform]: Cleaned and sorted list of platforms
+        """
         return sorted(filter(None, platforms), key=lambda p: p.name)
 
     @commands.guild_only()
@@ -46,6 +70,16 @@ class GamerDB(commands.Cog):
     async def register(
         self, ctx: commands.Context, gamertag: str, platforms: commands.Greedy[Platform]
     ):
+        """
+        Register a gamertag with a supported platform
+
+        Usage:
+            !register <gamertag> <platform1> <platform2>
+
+        Args:
+            gamertag: The in game name you'd like to register
+            platforms: A list of approved platform names to add under the gamertag
+        """
         platforms = self.filter_platforms(platforms)
         if platforms:
             await self.db.executemany(
@@ -67,6 +101,15 @@ class GamerDB(commands.Cog):
     async def unregister(
         self, ctx: commands.Context, platforms: commands.Greedy[Platform]
     ):
+        """
+        Unregister a platform
+
+        Usage:
+            !unregister <platform1> <platform2>
+
+        Args:
+            platforms: A list of approved platform names to remove from your profile
+        """
         platforms = self.filter_platforms(platforms)
         if platforms:
             await self.db.executemany(
@@ -86,6 +129,15 @@ class GamerDB(commands.Cog):
     @commands.guild_only()
     @commands.command()
     async def profile(self, ctx: commands.Context, member: discord.Member = None):
+        """
+        View platforms and usernames for a member
+
+        Usage:
+            !profile @member
+
+        Args:
+            member: The members profile to view. Defaults to the message author.
+        """
         member = member or ctx.author
         profiles = await self.db.execute_fetchall(sql.Query.profile, (member.id,))
         embed = discord.Embed(
@@ -102,7 +154,10 @@ class GamerDB(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command(name="platforms")
-    async def _platforms(self, ctx, platform: Platform = None):
+    async def _platforms(self, ctx):
+        """
+        View available platforms
+        """
         embed = discord.Embed(
             title="Supported Platforms",
             description="\n".join(
@@ -118,6 +173,16 @@ class GamerDB(commands.Cog):
     async def addPlatform(
         self, ctx: commands.Context, platform_name: str, emoji: discord.Emoji
     ):
+        """
+        Add a platform
+
+        Usage:
+            !addPlatform <platform_name> <:custom_emoji:>
+
+        Args:
+            platform_name: The name of the platform to add
+            emoji: The custom emoji to use for the platform
+        """
         platform_name = platform_name.lower()
         await self.db.execute(sql.Mutation.add_platform, (platform_name, emoji.id))
         await self.db.commit()
@@ -129,6 +194,15 @@ class GamerDB(commands.Cog):
     @commands.is_owner()
     @commands.command()
     async def deletePlatform(self, ctx: commands.Context, platform: Platform):
+        """
+        Delete a platform
+
+        Usage:
+            !deletePlatform <platform_name>
+
+        Args:
+            platform: The name of the platform to delete
+        """
         if platform:
             await self.db.execute(sql.Mutation.delete_platform, (platform.id,))
             await self.db.commit()
