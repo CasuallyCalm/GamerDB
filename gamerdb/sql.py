@@ -4,7 +4,7 @@ class CreateTable:
         CREATE TABLE IF NOT EXISTS players (
           id INTEGER PRIMARY KEY,
           member_id INTEGER NOT NULL,
-          gamertag TEXT NOT NULL,
+          username TEXT NOT NULL,
           platform_id INTEGER,
           UNIQUE(member_id, platform_id),
           FOREIGN KEY (platform_id)
@@ -31,12 +31,20 @@ class Query:
     """
 
     profile = """
-        SELECT players.gamertag, platforms.name, platforms.emoji_id
+        SELECT players.username, platforms.name, platforms.emoji_id
         FROM players
         JOIN platforms
         ON players.platform_id = platforms.id
         AND players.member_id = ?
         ORDER BY platforms.name
+    """
+
+    platform_players = """
+    SELECT member_id, username
+    FROM players
+    JOIN platforms
+    ON players.platform_id = platforms.id
+    WHERE platforms.id = ?
     """
 
 
@@ -53,10 +61,10 @@ class Mutation:
     """
 
     register_player = """
-        INSERT INTO players (member_id, gamertag, platform_id)
+        INSERT INTO players (member_id, username, platform_id)
         VALUES (?, ?, ?)
         ON CONFLICT (member_id, platform_id)
-            DO UPDATE SET gamertag=excluded.gamertag
+            DO UPDATE SET username=excluded.username
     """
 
     unregister_player = """
