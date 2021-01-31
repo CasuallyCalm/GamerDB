@@ -5,6 +5,8 @@
 # folders
 *.vscode
 *.git
+*.venv
+*__pycache__
 
 #data
 *.db
