@@ -1,8 +1,10 @@
+from dataclasses import dataclass
 from typing import Dict, List
+
 import aiosqlite
 import discord
+from discord import player
 from discord.ext import commands
-from dataclasses import dataclass
 
 from . import sql
 
@@ -68,23 +70,23 @@ class GamerDB(commands.Cog):
     @commands.guild_only()
     @commands.command()
     async def register(
-        self, ctx: commands.Context, gamertag: str, platforms: commands.Greedy[Platform]
+        self, ctx: commands.Context, username: str, platforms: commands.Greedy[Platform]
     ):
         """
-        Register a gamertag with a supported platform
+        Register a username with a supported platform
 
         Usage:
-            !register <gamertag> <platform1> <platform2>
+            !register <username> <platform1> <platform2>
 
         Args:
-            gamertag: The in game name you'd like to register
-            platforms: A list of approved platform names to add under the gamertag
+            username: The in game name you'd like to register
+            platforms: A list of approved platform names to add under the username
         """
         platforms = self.filter_platforms(platforms)
         if platforms:
             await self.db.executemany(
                 sql.Mutation.register_player,
-                [(ctx.author.id, gamertag, platform.id) for platform in platforms],
+                [(ctx.author.id, username, platform.id) for platform in platforms],
             )
             await self.db.commit()
             await ctx.send(
@@ -148,9 +150,35 @@ class GamerDB(commands.Cog):
         embed.set_thumbnail(url=member.avatar_url)
         if profiles:
             embed.description = "\n".join(
-                f"**{self.bot.get_emoji(emoji_id)}** | *{platform_name.title()}* | __{gamertag}__"
-                for gamertag, platform_name, emoji_id in profiles
+                f"**{self.bot.get_emoji(emoji_id)}** | *{platform_name.title()}* | __{username}__"
+                for username, platform_name, emoji_id in profiles
             )
+        await ctx.send(embed=embed)
+
+    @commands.guild_only()
+    @commands.command(aliases=["usersFor"])
+    async def users_for(self, ctx: commands.Context, platform: Platform):
+        """
+        Get a list of users that have registered for a platform
+
+        Args:
+            platform (Platform): The name of a valid platform
+        """
+        if not platform:
+            return await ctx.send("Missing of invalid platform name!")
+        players = [
+            f"<@{player['member_id']}> - {player['username']}"
+            for player in await self.db.execute_fetchall(
+                sql.Query.platform_players, (platform.id,)
+            )
+        ]
+        embed = discord.Embed(
+            color=discord.Color.blurple(),
+        )
+
+        embed.add_field(
+            name=self.bot.get_emoji(platform.emoji_id), value="\n".join(players)
+        )
         await ctx.send(embed=embed)
 
     @commands.command(name="platforms")
