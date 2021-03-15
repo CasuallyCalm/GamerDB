@@ -22,6 +22,13 @@ class CreateTable:
         );
         """
 
+    guilds = """
+        CREATE TABLE IF NOT EXISTS guilds (
+          id INTEGER PRIMARY KEY,
+          prefix TEXT NOT NULL
+        );
+        """
+
 
 class Query:
 
@@ -45,6 +52,12 @@ class Query:
     JOIN platforms
     ON players.platform_id = platforms.id
     WHERE platforms.id = ?
+    """
+
+    prefix = """
+        SELECT prefix
+        FROM guilds
+        WHERE id = ?
     """
 
 
@@ -71,4 +84,11 @@ class Mutation:
         DELETE FROM players
         WHERE member_id = ?
         AND platform_id = ?
+    """
+
+    register_prefix = """
+        INSERT INTO guilds (id, prefix)
+        VALUES (?, ?)
+        ON CONFLICT (id)
+            DO UPDATE SET prefix=excluded.prefix
     """

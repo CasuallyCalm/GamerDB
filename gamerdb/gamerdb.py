@@ -3,10 +3,11 @@ from typing import Dict, List
 
 import aiosqlite
 import discord
-from discord import player
 from discord.ext import commands
 
 from . import sql
+
+DEFAULT_PREFIX = "gdb/"
 
 
 @dataclass
@@ -33,6 +34,7 @@ class GamerDB(commands.Cog):
     def __init__(self, bot) -> None:
         print(f"Loaded cog {__name__}")
         self.bot: commands.Bot = bot
+        self.bot.command_prefix = self.get_prefix
         self.platforms: Dict[str, Platform]
         self.bot.loop.create_task(self.connect_and_create())
 
@@ -44,8 +46,14 @@ class GamerDB(commands.Cog):
         self.db.row_factory = aiosqlite.Row
         await self.db.execute(sql.CreateTable.players)
         await self.db.execute(sql.CreateTable.platforms)
+        await self.db.execute(sql.CreateTable.guilds)
         await self.db.commit()
         await self.cache_platforms()
+
+    async def get_prefix(self, bot: commands.Bot, message: discord.Message):
+        prefix = await self.db.execute_fetchall(sql.Query.prefix, (message.guild.id,))
+        prefix = prefix[0]["prefix"] if prefix else DEFAULT_PREFIX
+        return commands.when_mentioned_or(prefix)(bot, message)
 
     async def cache_platforms(self):
         """
@@ -66,6 +74,29 @@ class GamerDB(commands.Cog):
             List[Platform]: Cleaned and sorted list of platforms
         """
         return sorted(filter(None, platforms), key=lambda p: p.name)
+
+    @commands.guild_only()
+    @commands.command(aliases=["setPrefix"])
+    async def set_prefix(self, ctx: commands.Context, prefix: str = DEFAULT_PREFIX):
+        """
+        Set the prefix the bot will use for your guild.
+
+        Args:
+            prefix (str): The new prefix the bot will respond to.
+        """
+        await self.db.execute(sql.Mutation.register_prefix, (ctx.guild.id, prefix))
+        await self.db.commit()
+        await ctx.send(f"Prefix for this guild has been set to: **{prefix}**")
+
+    @commands.guild_only()
+    @commands.command(name="prefix")
+    async def _prefix(self, ctx: commands.Context):
+        """
+        Get the prefix for this guild.
+        """
+        prefix = await self.db.execute_fetchall(sql.Query.prefix, (ctx.guild.id,))
+        prefix = prefix[0]["prefix"] if prefix else DEFAULT_PREFIX
+        await ctx.send(f"The prefix for this guild is: **{prefix}**")
 
     @commands.guild_only()
     @commands.command()
@@ -141,17 +172,17 @@ class GamerDB(commands.Cog):
             member: The members profile to view. Defaults to the message author.
         """
         member = member or ctx.author
-        profiles = await self.db.execute_fetchall(sql.Query.profile, (member.id,))
+        platforms = await self.db.execute_fetchall(sql.Query.profile, (member.id,))
         embed = discord.Embed(
             title=f"Platform info for {member.display_name}",
             description="No platforms have been added",
             color=discord.Color.purple(),
         )
         embed.set_thumbnail(url=member.avatar_url)
-        if profiles:
+        if platforms:
             embed.description = "\n".join(
                 f"**{self.bot.get_emoji(emoji_id)}** | *{platform_name.title()}* | __{username}__"
-                for username, platform_name, emoji_id in profiles
+                for username, platform_name, emoji_id in platforms
             )
         await ctx.send(embed=embed)
 
@@ -240,3 +271,19 @@ class GamerDB(commands.Cog):
 
 def setup(bot: commands.Bot):
     bot.add_cog(GamerDB(bot))
+
+
+def run():
+    import os
+    import dotenv
+
+    dotenv.load_dotenv()
+
+    bot = commands.Bot(command_prefix="", case_insensitive=True)
+    bot.add_cog(GamerDB(bot))
+
+    @bot.event
+    async def on_ready():
+        print("Started GamerDB!")
+
+    bot.run(os.environ["DISCORD_TOKEN"])
