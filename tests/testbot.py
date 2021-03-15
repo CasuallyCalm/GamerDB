@@ -5,7 +5,7 @@ from discord.ext import commands
 
 dotenv.load_dotenv("./tests/.env")
 
-bot = commands.Bot(command_prefix=os.environ["COMMAND_PREFIX"], case_insensitive=True)
+bot = commands.Bot(command_prefix="!", case_insensitive=True)
 
 bot.load_extension("gamerdb.gamerdb")
 
@@ -17,3 +17,7 @@ async def on_ready():
 
 def run():
     bot.run(os.environ["DISCORD_TOKEN"])
+
+
+if __name__ == "__main__":
+    run()

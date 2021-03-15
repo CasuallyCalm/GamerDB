@@ -16,6 +16,7 @@ python-dotenv = "^0.15.0"
 
 [tool.poetry.scripts]
 test = "tests.testbot:run"
+run = "gamerdb.gamerdb:run"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
