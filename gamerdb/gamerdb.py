@@ -75,7 +75,7 @@ class GamerDB(commands.Cog):
         """
         return sorted(filter(None, platforms), key=lambda p: p.name)
 
-    @commands.has_permissions("Administrator")
+    @commands.has_permissions(administrator=True)
     @commands.guild_only()
     @commands.command(aliases=["set_prefix"])
     async def setPrefix(self, ctx: commands.Context, prefix: str = DEFAULT_PREFIX):
@@ -197,12 +197,13 @@ class GamerDB(commands.Cog):
             platform (Platform): The name of a valid platform
         """
         if not platform:
-            return await ctx.send("Missing of invalid platform name!")
+            return await ctx.send("Missing or invalid platform name!")
         players = [
             f"<@{player['member_id']}> - {player['username']}"
             for player in await self.db.execute_fetchall(
                 sql.Query.platform_players, (platform.id,)
             )
+            if ctx.guild.get_member(player["member_id"])
         ]
         embed = discord.Embed(color=discord.Color.blurple(),)
 
