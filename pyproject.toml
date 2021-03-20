@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "GamerDB"
-version = "1.0.0"
+version = "2.0.0"
 description = ""
 authors = ["StroupBSlayen <29642143+stroupbslayen@users.noreply.github.com>"]
 
@@ -17,6 +17,7 @@ python-dotenv = "^0.15.0"
 [tool.poetry.scripts]
 test = "tests.testbot:run"
 run = "gamerdb.gamerdb:run"
+migrate = "migrate:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
