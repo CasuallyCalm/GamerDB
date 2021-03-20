@@ -75,9 +75,10 @@ class GamerDB(commands.Cog):
         """
         return sorted(filter(None, platforms), key=lambda p: p.name)
 
+    @commands.has_permissions("Administrator")
     @commands.guild_only()
-    @commands.command(aliases=["setPrefix"])
-    async def set_prefix(self, ctx: commands.Context, prefix: str = DEFAULT_PREFIX):
+    @commands.command(aliases=["set_prefix"])
+    async def setPrefix(self, ctx: commands.Context, prefix: str = DEFAULT_PREFIX):
         """
         Set the prefix the bot will use for your guild.
 
@@ -187,8 +188,8 @@ class GamerDB(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.guild_only()
-    @commands.command(aliases=["usersFor"])
-    async def users_for(self, ctx: commands.Context, platform: Platform):
+    @commands.command(aliases=["users_for"])
+    async def usersFor(self, ctx: commands.Context, platform: Platform):
         """
         Get a list of users that have registered for a platform
 
@@ -203,9 +204,7 @@ class GamerDB(commands.Cog):
                 sql.Query.platform_players, (platform.id,)
             )
         ]
-        embed = discord.Embed(
-            color=discord.Color.blurple(),
-        )
+        embed = discord.Embed(color=discord.Color.blurple(),)
 
         embed.add_field(
             name=self.bot.get_emoji(platform.emoji_id), value="\n".join(players)
