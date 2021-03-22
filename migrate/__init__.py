@@ -50,10 +50,10 @@ class Migrator:
         self.new_db.commit()
 
     def migrate(self):
-        # print("Migrating guild prefixes")
-        # self.__migrate_guilds()
-        # print("Migrating platforms")
-        # self.__migrate_platforms()
+        print("Migrating guild prefixes")
+        self.__migrate_guilds()
+        print("Migrating platforms")
+        self.__migrate_platforms()
         print("Migrating user profiles")
         self.__migrate_users()
 
