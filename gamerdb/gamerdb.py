@@ -1,18 +1,16 @@
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict, List, Optional, Union
 
 import aiosqlite
 import discord
-from discord import app_commands
+from discord.ui import View, Select
+from discord import app_commands, Emoji
 from discord.ext import commands
 
 from . import sql
 
-DEFAULT_PREFIX = "gdb/"
-
-
 @dataclass
-class Platform(commands.Converter):
+class Platform:
     """
     A Dataclass representing platforms
 
@@ -26,16 +24,76 @@ class Platform(commands.Converter):
     name: str = None
     emoji_id: int = None
 
-    @staticmethod
-    async def convert(ctx: commands.Context, argument: str):
-        return ctx.cog.platforms.get(argument.lower())
+class _PlatformTransformer(app_commands.Transformer):
+    def __init__(self, platforms: Dict[str,Platform] = None) -> None:
+        if platforms is None:
+            platforms = {}
+        self.platforms = platforms
+    
+    async def transform(self, interaction: discord.Interaction, value: str) -> Platform:
+    
+        return self.platforms.get(value)
+
+PlatformTransformer=_PlatformTransformer()
+
+class EmojiTransformer(app_commands.Transformer):
+
+    async def transform(self, interaction: discord.Interaction, value: str) -> Emoji:
+        ctx = await commands.Context.from_interaction(interaction)
+        return await commands.converter.EmojiConverter().convert(ctx, value)
 
 
+class RegisterView(View):
 
-    @discord.ui.select(placeholder="Select Platforms...", max_values=2)
-    async def platform_select(self, interaction:discord.Interaction, select:discord.ui.Select):
-        self.platforms=select.values
+    def __init__(self, username:str, db:aiosqlite.Connection, options:List[discord.SelectOption]):
+        super().__init__()
+        self.username =  username
+        self.db = db
+        self.options = options
+        self.platform_select.max_values=len(options)
+        for option in options:
+            self.platform_select.append_option(option)
+
+    @discord.ui.select(placeholder="Select Platforms to Register...")
+    async def platform_select(self, interaction:discord.Interaction, select:Select):
+        await self.db.executemany(
+            sql.Mutation.register_player,
+            [( interaction.user.id, self.username, int(platform_id)) for platform_id in select.values],
+        )
+        await self.db.commit()
+        await interaction.response.send_message(
+            f'{interaction.user.mention}, the selected platform(s) have been registered for **{self.username}**!',
+            ephemeral=True
+        )
+
+class UnRegisterView(View):
+
+    def __init__(self, db:aiosqlite.Connection, options:List[discord.SelectOption]):
+        super().__init__()
+        self.db = db
+        self.options = options
+        self.platform_select.max_values=len(options)
+        for option in options:
+            self.platform_select.append_option(option)
+
+    @discord.ui.select(placeholder="Select Platforms to Unregister...")
+    async def platform_select(self, interaction:discord.Interaction, select:Select):
+        print(select.values)
+        await self.db.executemany(
+            sql.Mutation.unregister_player,
+            [(interaction.user.id, int(platform_id)) for platform_id in select.values],
+        )
+        await self.db.commit()
         
+        await interaction.response.send_message(f'{interaction.user.mention}, the selected platform(s) have been unregistered!', ephemeral=True)
+
+def is_owner():
+    """
+    Checks if the person who used the command is the bot owner
+    """
+    def predicate(interaction: discord.Interaction) -> bool:
+        return interaction.user.id == interaction.client.application.owner.id
+    return app_commands.check(predicate)
 
 
 @app_commands.guild_only()
@@ -59,6 +117,17 @@ class GamerDB(commands.GroupCog, name="gdb"):
         await self.db.execute(sql.CreateTable.guilds)
         await self.db.commit()
         await self.cache_platforms()
+        self._inject_platform_choices()
+
+    def _inject_platform_choices(self):
+        """
+        Force choices on user-for, must be loaded after platforms have been cached
+        """
+        PlatformTransformer.platforms= self.platforms
+        targets = [self.users_for, self.delete_platform]
+        for target in targets:
+            param = target._params.get("platform")
+            param.choices = [discord.app_commands.Choice(name=platform.title(), value=platform) for platform in self.platforms]
     
     async def cog_unload(self) -> None:
         """
@@ -84,180 +153,162 @@ class GamerDB(commands.GroupCog, name="gdb"):
         Returns:
             List[Platform]: Cleaned and sorted list of platforms
         """
-        return sorted(filter(None, platforms), key=lambda p: p.name)   
+        return sorted(filter(None, platforms), key=lambda p: p.name)
+    
+    async def get_platform_options(self, user:Union[discord.User, discord.Member]=None) -> List[discord.SelectOption]:
+        """
+        Create a list of discord SelectionOptions to select platforms for views
+
+
+        Args:
+            user (Union[discord.User, discord.Member], optional): Get the platforms a user is currently registered for. Defaults to None.
+
+        Returns:
+            List[discord.SelectOption]: List of options to user for select menus in Views
+        """
+        platforms:List[Platform] = self.platforms.values()
+        if user:
+            platforms = [Platform(*_platform) for _platform in await self.db.execute_fetchall(sql.Query.player_platforms, (user.id,))]
+
+        return [discord.SelectOption(label=platform.name, value=platform.id, emoji=self.bot.get_emoji(platform.emoji_id)) for platform in platforms]
 
     @app_commands.guild_only()
     @app_commands.command()
     async def register(self, interaction: discord.Interaction, username:str):
         """
         Register a username with a supported platform
-        """     
-        options = [discord.SelectOption(label=platform.name, value=index, emoji=self.bot.get_emoji(platform.emoji_id)) for index, platform in enumerate(self.platforms.values())]
-        async def platform_select(view: discord.ui.view, interaction:discord.Interaction, select:discord.ui.Select):
-            pass
-        select = discord.ui.Select(placeholder="Select Platforms...",options=options, max_values=len(self.platforms))
-        select.callback=platform_select
-        view = discord.ui.View()
-        view.add_item(select)
-        await interaction.response.send_message(view=view)
+
+        Args:
+            username (str): The in-game-name/gamertag you want to register
+        """
+
+        view = RegisterView(username=username, db=self.db, options= await self.get_platform_options())
+        await interaction.response.send_message(view=view, ephemeral=True)
+
+    @app_commands.guild_only()
+    @app_commands.command()
+    async def unregister(self, interaction:discord.Interaction):
+        """
+        Unregister from a platform or platforms
+        """
+        if user_platform_options := await self.get_platform_options(interaction.user):
+            view=UnRegisterView(db=self.db, options=user_platform_options)
+            return await interaction.response.send_message(view=view, ephemeral=True)
+
+        await interaction.response.send_message(f"{interaction.user.mention}, you're not registered for any platforms!", ephemeral=True)
 
 
-        # if platforms := self.filter_platforms(platforms):
-        #     await self.db.executemany(
-        #         sql.Mutation.register_player,
-        #         [(ctx.author.id, username, platform.id) for platform in platforms],
-        #     )
-        #     await self.db.commit()
-        #     await ctx.send(
-        #         f'{ctx.author.mention}, user info for {", ".join(f"**{platform.name.title()}**" for platform in platforms)} has been registered!'
-        #     )
+    @app_commands.guild_only()
+    @app_commands.command()
+    async def profile(self, interaction:discord.Interaction, member: Optional[discord.Member] = None):
+        """
+        View platforms and usernames for a member or yourself
 
-        # else:
-        #     await ctx.send(
-        #         f"{ctx.author.mention}, you didn't enter any valid platforms"
-        #     )
+        Usage:
+            !profile @member
 
-    # @commands.guild_only()
-    # @commands.command()
-    # async def unregister(
-    #     self, ctx: commands.Context, platforms: commands.Greedy[Platform]
-    # ):
-    #     """
-    #     Unregister a platform
+        Args:
+            member: The members profile to view. Defaults to the message author.
+        """
+        member = member or interaction.user
+        platforms = await self.db.execute_fetchall(sql.Query.profile, (member.id,))
+        embed = discord.Embed(
+            title=f"Platform info for {member.display_name}",
+            description="No platforms have been added",
+            color=discord.Color.purple(),
+        )
+        embed.set_thumbnail(url=member.avatar.url)
+        if platforms:
+            embed.description = "\n".join(
+                f"**{self.bot.get_emoji(emoji_id)}** | *{platform_name.title()}* | __{username}__"
+                for username, platform_name, emoji_id in platforms
+            )
+        await interaction.response.send_message(embed=embed)
 
-    #     Usage:
-    #         !unregister <platform1> <platform2>
+    @app_commands.guild_only()
+    @app_commands.command(name='users-for')
+    async def users_for(self, interaction: discord.Interaction, platform: app_commands.Transform[Platform, PlatformTransformer]):
+        """
+        Get a list of users that have registered for a platform
 
-    #     Args:
-    #         platforms: A list of approved platform names to remove from your profile
-    #     """
-    #     platforms = self.filter_platforms(platforms)
-    #     if platforms:
-    #         await self.db.executemany(
-    #             sql.Mutation.unregister_player,
-    #             [(ctx.author.id, platform.id) for platform in platforms],
-    #         )
-    #         await self.db.commit()
-    #         await ctx.send(
-    #             f'{ctx.author.mention}, user info for {", ".join(f"**{platform.name.title()}**" for platform in platforms)} has been unregistered!'
-    #         )
+        Args:
+            platform (Platform): The name of a valid platform
+        """
+        players = [f"<@{player['member_id']}> - {player['username']}" for player in await self.db.execute_fetchall(sql.Query.platform_players, (platform.id,)) if interaction.guild.get_member(player["member_id"])]
 
-    #     else:
-    #         await ctx.send(
-    #             f"{ctx.author.mention}, you didn't enter any valid platforms"
-    #         )
+        embed = discord.Embed(color=discord.Color.blurple())
+        embed.title = f"{self.bot.get_emoji(platform.emoji_id)} Members of {interaction.guild.name} who have registered with {platform.name.title()}"
 
-    # @commands.guild_only()
-    # @commands.command()
-    # async def profile(self, ctx: commands.Context, member: discord.Member = None):
-    #     """
-    #     View platforms and usernames for a member
+        embed.add_field(name="Registered", value="\n".join(players) if players else "*empty*")
 
-    #     Usage:
-    #         !profile @member
+        await interaction.response.send_message(embed=embed)
+        
+    @app_commands.command(name="platforms")
+    async def _platforms(self, interaction:discord.Interaction):
+        """
+        View available platforms
+        """
+        embed = discord.Embed(
+            title="Supported Platforms",
+            description="\n".join(
+                f"{self.bot.get_emoji(platform.emoji_id)}: **{platform.name.title()}**"
+                for platform in self.platforms.values()
+            ),
+            color=discord.Color.green(),
+        )
+        await interaction.response.send_message(embed=embed)
 
-    #     Args:
-    #         member: The members profile to view. Defaults to the message author.
-    #     """
-    #     member = member or ctx.author
-    #     platforms = await self.db.execute_fetchall(sql.Query.profile, (member.id,))
-    #     embed = discord.Embed(
-    #         title=f"Platform info for {member.display_name}",
-    #         description="No platforms have been added",
-    #         color=discord.Color.purple(),
-    #     )
-    #     embed.set_thumbnail(url=member.avatar_url)
-    #     if platforms:
-    #         embed.description = "\n".join(
-    #             f"**{self.bot.get_emoji(emoji_id)}** | *{platform_name.title()}* | __{username}__"
-    #             for username, platform_name, emoji_id in platforms
-    #         )
-    #     await ctx.send(embed=embed)
+    @is_owner()
+    @app_commands.guild_only()
+    @app_commands.command(name="add-platform")
+    async def add_platform(self, interaction:discord.Interaction, platform_name: str, emoji:app_commands.Transform[Emoji,EmojiTransformer]):
+        """
+        Add a platform
 
-    # @commands.guild_only()
-    # @commands.command(aliases=["users_for"])
-    # async def usersFor(self, ctx: commands.Context, platform: Platform):
-    #     """
-    #     Get a list of users that have registered for a platform
+        Usage:
+            !addPlatform <platform_name> <:custom_emoji:>
 
-    #     Args:
-    #         platform (Platform): The name of a valid platform
-    #     """
-    #     if not platform:
-    #         return await ctx.send("Missing or invalid platform name!")
-    #     players = [
-    #         f"<@{player['member_id']}> - {player['username']}"
-    #         for player in await self.db.execute_fetchall(
-    #             sql.Query.platform_players, (platform.id,)
-    #         )
-    #         if ctx.guild.get_member(player["member_id"])
-    #     ]
-    #     embed = discord.Embed(color=discord.Color.blurple(),)
+        Args:
+            platform_name: The name of the platform to add
+            emoji: The custom emoji to use for the platform
+        """
+        platform_name = platform_name.lower()
+        await self.db.execute(sql.Mutation.add_platform, (platform_name, emoji.id))
+        await self.db.commit()
+        await interaction.response.send_message(
+            f"Added platform: **{platform_name.title()}**\nWith Emoji: {emoji}",
+            ephemeral=True
+        )
+        await self.cache_platforms()
 
-    #     embed.add_field(
-    #         name=self.bot.get_emoji(platform.emoji_id), value="\n".join(players)
-    #     )
-    #     await ctx.send(embed=embed)
+    @is_owner()
+    @app_commands.command(name='delete-platform')
+    async def delete_platform(self, interaction:discord.Interaction, platform:app_commands.Transform[Platform, PlatformTransformer]):
+        """
+        Delete a platform
 
-    # @commands.command(name="platforms")
-    # async def _platforms(self, ctx):
-    #     """
-    #     View available platforms
-    #     """
-    #     embed = discord.Embed(
-    #         title="Supported Platforms",
-    #         description="\n".join(
-    #             f"{self.bot.get_emoji(platform.emoji_id)}: **{platform.name.title()}**"
-    #             for platform in self.platforms.values()
-    #         ),
-    #         color=discord.Color.green(),
-    #     )
-    #     await ctx.send(embed=embed)
+        Usage:
+            !deletePlatform <platform_name>
 
-    # @commands.is_owner()
-    # @commands.command()
-    # async def addPlatform(
-    #     self, ctx: commands.Context, platform_name: str, emoji: discord.Emoji
-    # ):
-    #     """
-    #     Add a platform
-
-    #     Usage:
-    #         !addPlatform <platform_name> <:custom_emoji:>
-
-    #     Args:
-    #         platform_name: The name of the platform to add
-    #         emoji: The custom emoji to use for the platform
-    #     """
-    #     platform_name = platform_name.lower()
-    #     await self.db.execute(sql.Mutation.add_platform, (platform_name, emoji.id))
-    #     await self.db.commit()
-    #     await ctx.author.send(
-    #         f"Added platform: **{platform_name}**\nWith Emoji: {emoji}"
-    #     )
-    #     await self.cache_platforms()
-
-    # @commands.is_owner()
-    # @commands.command()
-    # async def deletePlatform(self, ctx: commands.Context, platform: Platform):
-    #     """
-    #     Delete a platform
-
-    #     Usage:
-    #         !deletePlatform <platform_name>
-
-    #     Args:
-    #         platform: The name of the platform to delete
-    #     """
-    #     if platform:
-    #         await self.db.execute(sql.Mutation.delete_platform, (platform.id,))
-    #         await self.db.commit()
-    #         await ctx.author.send(f"Deleted platform: **{platform.name}**")
-    #         await self.cache_platforms()
+        Args:
+            platform: The name of the platform to delete
+        """
+        if platform:
+            await self.db.execute(sql.Mutation.delete_platform, (platform.id,))
+            await self.db.commit()
+            await interaction.response.send_message(f"Deleted platform: **{platform.name}**", ephemeral=True)
+            await self.cache_platforms()
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(GamerDB(bot=bot))
 
+
+class GamerBot(commands.Bot):
+
+    async def setup_hook(self) -> None:
+       await self.add_cog(GamerDB(self))
+       print("Started GamerDB!")
+    
 
 def run():
     import os
@@ -266,11 +317,7 @@ def run():
 
     dotenv.load_dotenv()
 
-    bot = commands.Bot(command_prefix="", case_insensitive=True)
-    bot.add_cog(GamerDB(bot))
-
-    @bot.event
-    async def on_ready():
-        print("Started GamerDB!")
+    intents = discord.Intents.default()
+    bot = GamerBot(commands.when_mentioned, intents=intents)
 
     bot.run(os.environ["DISCORD_TOKEN"])

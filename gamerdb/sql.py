@@ -46,6 +46,15 @@ class Query:
         ORDER BY platforms.name
     """
 
+    player_platforms = """
+        SELECT platforms.id, platforms.name, platforms.emoji_id
+        FROM players
+        JOIN platforms
+        ON players.platform_id = platforms.id
+        AND players.member_id = ?
+        ORDER BY platforms.name
+    """
+
     platform_players = """
     SELECT member_id, username
     FROM players
