@@ -84,7 +84,6 @@ class UnRegisterView(View):
 
     @discord.ui.select(placeholder="Select Platforms to Unregister...")
     async def platform_select(self, interaction: discord.Interaction, select: Select):
-        print(select.values)
         await self.db.executemany(
             sql.Mutation.unregister_player,
             [(interaction.user.id, int(platform_id)) for platform_id in select.values],
@@ -247,7 +246,7 @@ class GamerDB(commands.GroupCog, name="gdb"):
     @app_commands.rename(platform_name="platform-name")
     async def add_platform(self, interaction: discord.Interaction, platform_name: str, emoji: app_commands.Transform[Emoji,EmojiTransformer]):
         """
-        Add a platform
+        (Bot Owner Only) Add a platform 
 
         Usage:
             !addPlatform <platform_name> <:custom_emoji:>
@@ -269,7 +268,7 @@ class GamerDB(commands.GroupCog, name="gdb"):
     @app_commands.command(name='delete-platform')
     async def delete_platform(self, interaction: discord.Interaction, platform: app_commands.Transform[Platform, PlatformTransformer]):
         """
-        Delete a platform
+        (Bot Owner Only) Delete a platform
 
         Usage:
             !deletePlatform <platform_name>
