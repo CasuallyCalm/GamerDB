@@ -19,7 +19,7 @@ View platforms and usernames for a member or yourself
 View available platforms
 
 ### users-for
-Get a list of users that have registered for a platform
+Get a list of users in the server that have registered for a platform
 
 ## Bot Owner Commands
 
