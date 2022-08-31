@@ -1,20 +1,30 @@
 # GamerDB
 Do you have different gamertags or IDs associated with your various games? Let GamerDB keep track so others can add you more easily!
 
-## Main Commands
+## Prefix
+`/gdb`
 
-### Register
-![register](https://raw.githubusercontent.com/stroupbslayen/GamerDB/master/images/examples/register.PNG)
+## User Commands
 
-### Unregister
-![unregister](https://raw.githubusercontent.com/stroupbslayen/GamerDB/master/images/examples/unregister.PNG)
+### register
+Register a username and select the platforms you'd like it to be associated with
 
-### Profile
-Not mentioning someone will display your profile
+### unregister
+Unregister from a platform or platforms
 
-![profile](https://raw.githubusercontent.com/stroupbslayen/GamerDB/master/images/examples/profile.PNG)
+### profile
+View platforms and usernames for a member or yourself
 
-Mentioning someone will display their profile
+### platforms
+View available platforms
 
-![profile2](https://raw.githubusercontent.com/stroupbslayen/GamerDB/master/images/examples/profile2.PNG)
+### users-for
+Get a list of users that have registered for a platform
 
+## Bot Owner Commands
+
+### add-platform
+Add a platform and linked emoji to the bot
+
+### delete-platform
+Delete a platform from the bot
