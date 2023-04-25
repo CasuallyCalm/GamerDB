@@ -1,0 +1,13 @@
+# trashed
+*.env
+*.pyc
+
+# folders
+*.vscode
+*.git
+*.venv
+*__pycache__
+
+#data
+*.db
+*.json

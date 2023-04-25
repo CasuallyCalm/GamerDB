@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "GamerDB"
+version = "2.0.0"
+description = ""
+authors = ["CasuallyCalm <29642143+CasuallyCalm@users.noreply.github.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+"discord.py" = "^2.0.1"
+aiosqlite = "^0.17.0"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.2"
+black = "^22.6.0"
+python-dotenv = "^0.20.0"
+
+[tool.poetry.scripts]
+test = "tests.testbot:run"
+run = "gamerdb.gamerdb:run"
+migrate = "migrate:main"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
